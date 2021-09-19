@@ -1,14 +1,11 @@
-package br.com.gmfonseca.taskmanager.routes
+package br.com.gmfonseca.taskmanager.application.routes
 
 import br.com.gmfonseca.taskmanager.model.Task
 import br.com.gmfonseca.taskmanager.model.taskStorage
+import br.com.gmfonseca.taskmanager.utils.ext.mapNameToBytes
 import io.ktor.application.Application
 import io.ktor.application.call
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.content.MultiPartData
-import io.ktor.http.content.PartData
-import io.ktor.http.content.forEachPart
-import io.ktor.http.content.streamProvider
 import io.ktor.request.receive
 import io.ktor.request.receiveMultipart
 import io.ktor.response.respond
@@ -20,7 +17,6 @@ import io.ktor.routing.put
 import io.ktor.routing.route
 import io.ktor.routing.routing
 import java.io.File
-import java.util.UUID
 
 fun Application.registerTaskRoutes() = routing { taskRouting() }
 
@@ -125,15 +121,12 @@ private fun Route.completeTask() {
                 message = "Task not found."
             )
 
-            val file = File(uploadsDir, fileName)
-                .also { it.writeBytes(fileBytes) }
+            val file: File = File(uploadsDir, fileName).also { it.writeBytes(fileBytes) }
 
             if (!task.isCompleted) {
                 task.isCompleted = true
             } else {
-                task.imagePath?.let {
-                    File(it).delete()
-                }
+                task.imagePath?.let { File(it).delete() }
             }
 
             task.imagePath = file.path
@@ -146,23 +139,4 @@ private fun Route.completeTask() {
             )
         }
     }
-}
-
-private suspend fun MultiPartData.mapNameToBytes(): Pair<String, ByteArray> {
-    var fileName = UUID.randomUUID().toString()
-    lateinit var fileBytes: ByteArray
-
-    forEachPart { part ->
-        if (part is PartData.FileItem) {
-            if (!fileName.contains(".")) {
-                part.originalFileName
-                    ?.substringAfterLast(".")
-                    ?.also { fileName += ".$it" }
-            }
-
-            fileBytes = part.streamProvider().readBytes()
-        }
-    }
-
-    return fileName to fileBytes
 }

@@ -1,6 +1,6 @@
 package br.com.gmfonseca.taskmanager
 
-import br.com.gmfonseca.taskmanager.routes.registerTaskRoutes
+import br.com.gmfonseca.taskmanager.application.routes.registerTaskRoutes
 import io.ktor.application.Application
 import io.ktor.application.install
 import io.ktor.features.CORS
