@@ -13,6 +13,7 @@ import io.ktor.request.receive
 import io.ktor.request.receiveMultipart
 import io.ktor.response.respond
 import io.ktor.routing.Route
+import io.ktor.routing.delete
 import io.ktor.routing.get
 import io.ktor.routing.post
 import io.ktor.routing.put
@@ -27,6 +28,7 @@ fun Route.taskRouting() = route("tasks") {
     listTasks()
     findTask()
     saveTask()
+    deleteTask()
     completeTask()
 }
 
@@ -66,6 +68,24 @@ private fun Route.saveTask() {
         taskStorage.add(task)
 
         call.respond(HttpStatusCode.Created, task)
+    }
+}
+
+private fun Route.deleteTask() {
+    delete("{id}") {
+        val id = call.parameters["id"] ?: return@delete call.respond(
+            status = HttpStatusCode.BadRequest,
+            message = "Missing or malformed id"
+        )
+
+        if (taskStorage.removeIf { it.id == id }) {
+            call.respond(HttpStatusCode.OK)
+        } else {
+            call.respond(
+                status = HttpStatusCode.NotFound,
+                message = "Task not found."
+            )
+        }
     }
 }
 

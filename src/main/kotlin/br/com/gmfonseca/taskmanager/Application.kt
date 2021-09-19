@@ -5,7 +5,6 @@ import io.ktor.application.Application
 import io.ktor.application.install
 import io.ktor.features.CORS
 import io.ktor.features.ContentNegotiation
-import io.ktor.http.HttpHeaders
 import io.ktor.serialization.json
 import io.ktor.server.netty.EngineMain
 
