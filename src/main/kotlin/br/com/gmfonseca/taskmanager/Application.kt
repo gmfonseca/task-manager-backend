@@ -1,5 +1,6 @@
 package br.com.gmfonseca.taskmanager
 
+import br.com.gmfonseca.taskmanager.routes.registerTaskRoutes
 import io.ktor.application.Application
 import io.ktor.application.install
 import io.ktor.features.ContentNegotiation
@@ -14,4 +15,6 @@ fun Application.module() {
     install(ContentNegotiation) {
         json() // adding support to json
     }
+
+    registerTaskRoutes()
 }
