@@ -36,11 +36,26 @@ private fun Route.listTasks() {
     get {
         if (taskStorage.isEmpty()) {
             call.respond(
-                status = HttpStatusCode.NotFound,
+                status = HttpStatusCode.OK,
                 message = "No tasks registered."
             )
         } else {
-            call.respond(taskStorage)
+            val completed = call.parameters["completed"]?.toBooleanStrictOrNull()
+
+            val response = if (completed != null) {
+                taskStorage.filter { it.isCompleted == completed }
+            } else {
+                taskStorage
+            }
+
+            if (response.isEmpty()) {
+                call.respond(
+                    status = HttpStatusCode.OK,
+                    message = "No tasks registered."
+                )
+            } else {
+                call.respond(response)
+            }
         }
     }
 }
@@ -96,7 +111,7 @@ private fun Route.completeTask() {
         uploadsDir.mkdirs()
     }
 
-    put("{id}/complete") {
+    put("{id}") {
         val id = call.parameters["id"] ?: return@put call.respond(
             status = HttpStatusCode.BadRequest,
             message = "Missing or malformed id"
