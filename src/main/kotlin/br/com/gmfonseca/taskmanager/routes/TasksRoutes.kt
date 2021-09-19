@@ -5,7 +5,12 @@ import br.com.gmfonseca.taskmanager.model.taskStorage
 import io.ktor.application.Application
 import io.ktor.application.call
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.MultiPartData
+import io.ktor.http.content.PartData
+import io.ktor.http.content.forEachPart
+import io.ktor.http.content.streamProvider
 import io.ktor.request.receive
+import io.ktor.request.receiveMultipart
 import io.ktor.response.respond
 import io.ktor.routing.Route
 import io.ktor.routing.get
@@ -13,6 +18,8 @@ import io.ktor.routing.post
 import io.ktor.routing.put
 import io.ktor.routing.route
 import io.ktor.routing.routing
+import java.io.File
+import java.util.UUID
 
 fun Application.registerTaskRoutes() = routing { taskRouting() }
 
@@ -63,21 +70,64 @@ private fun Route.saveTask() {
 }
 
 private fun Route.completeTask() {
+    val uploadsDir = File("uploads")
+
+    if (!uploadsDir.exists()) {
+        uploadsDir.mkdirs()
+    }
+
     put("{id}/complete") {
         val id = call.parameters["id"] ?: return@put call.respond(
             status = HttpStatusCode.BadRequest,
             message = "Missing or malformed id"
         )
 
-        val task = taskStorage.find { it.id == id } ?: return@put call.respond(
-            status = HttpStatusCode.NotFound,
-            message = "Task not found."
-        )
+        try {
+            val (fileName, fileBytes) = call.receiveMultipart().mapNameToBytes()
 
-        if (!task.isCompleted) {
-            task.isCompleted = true
+            val task = taskStorage.find { it.id == id } ?: return@put call.respond(
+                status = HttpStatusCode.NotFound,
+                message = "Task not found."
+            )
+
+            val file = File(uploadsDir, fileName)
+                .also { it.writeBytes(fileBytes) }
+
+            if (!task.isCompleted) {
+                task.isCompleted = true
+            } else {
+                task.imagePath?.let {
+                    File(it).delete()
+                }
+            }
+
+            task.imagePath = file.path
+
+            call.respond(task)
+        } catch (_: UninitializedPropertyAccessException) {
+            call.respond(
+                status = HttpStatusCode.BadRequest,
+                message = "Missing upload file"
+            )
         }
-
-        call.respond(task)
     }
+}
+
+private suspend fun MultiPartData.mapNameToBytes(): Pair<String, ByteArray> {
+    var fileName = UUID.randomUUID().toString()
+    lateinit var fileBytes: ByteArray
+
+    forEachPart { part ->
+        if (part is PartData.FileItem) {
+            if (!fileName.contains(".")) {
+                part.originalFileName
+                    ?.substringAfterLast(".")
+                    ?.also { fileName += ".$it" }
+            }
+
+            fileBytes = part.streamProvider().readBytes()
+        }
+    }
+
+    return fileName to fileBytes
 }
