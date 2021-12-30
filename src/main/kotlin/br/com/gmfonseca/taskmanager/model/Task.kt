@@ -1,5 +1,6 @@
 package br.com.gmfonseca.taskmanager.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 val taskStorage = mutableListOf<Task>()
@@ -10,6 +11,6 @@ data class Task(
     val id: String = "${autoIncrement++}",
     val title: String,
     val description: String,
-    var isCompleted: Boolean = false,
-    var imagePath: String? = null
+    @SerialName("is_completed") var isCompleted: Boolean = false,
+    @SerialName("image_path") var imagePath: String? = null
 )

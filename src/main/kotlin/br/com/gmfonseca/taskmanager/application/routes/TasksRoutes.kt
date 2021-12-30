@@ -23,36 +23,22 @@ fun Application.registerTaskRoutes() = routing { taskRouting() }
 fun Route.taskRouting() = route("tasks") {
     listTasks()
     findTask()
-    saveTask()
+    createTask()
     deleteTask()
     completeTask()
 }
 
 private fun Route.listTasks() {
     get {
-        if (taskStorage.isEmpty()) {
-            call.respond(
-                status = HttpStatusCode.OK,
-                message = "No tasks registered."
-            )
+        val completed = call.parameters["completed"]?.toBooleanStrictOrNull()
+
+        val response = if (completed != null) {
+            taskStorage.filter { it.isCompleted == completed }
         } else {
-            val completed = call.parameters["completed"]?.toBooleanStrictOrNull()
-
-            val response = if (completed != null) {
-                taskStorage.filter { it.isCompleted == completed }
-            } else {
-                taskStorage
-            }
-
-            if (response.isEmpty()) {
-                call.respond(
-                    status = HttpStatusCode.OK,
-                    message = "No tasks registered."
-                )
-            } else {
-                call.respond(response)
-            }
+            taskStorage
         }
+
+        call.respond(response)
     }
 }
 
@@ -72,7 +58,7 @@ private fun Route.findTask() {
     }
 }
 
-private fun Route.saveTask() {
+private fun Route.createTask() {
     post {
         val task = call.receive<Task>()
 
@@ -133,6 +119,7 @@ private fun Route.completeTask() {
 
             call.respond(task)
         } catch (_: UninitializedPropertyAccessException) {
+            println("[CompleteTask] Missing upload file")
             call.respond(
                 status = HttpStatusCode.BadRequest,
                 message = "Missing upload file"
