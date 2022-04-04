@@ -8,7 +8,7 @@ import io.ktor.application.call
 import io.ktor.http.HttpStatusCode
 import io.ktor.request.receive
 import io.ktor.request.receiveMultipart
-import io.ktor.response.respond
+import io.ktor.response.*
 import io.ktor.routing.Route
 import io.ktor.routing.delete
 import io.ktor.routing.get
@@ -26,6 +26,7 @@ fun Route.taskRouting() = route("tasks") {
     createTask()
     deleteTask()
     completeTask()
+    getImage()
 }
 
 private fun Route.listTasks() {
@@ -107,7 +108,7 @@ private fun Route.completeTask() {
                 message = "Task not found."
             )
 
-            val file: File = File(uploadsDir, fileName).also { it.writeBytes(fileBytes) }
+            val file = File(uploadsDir, fileName).also { it.writeBytes(fileBytes) }
 
             if (!task.isCompleted) {
                 task.isCompleted = true
@@ -115,7 +116,7 @@ private fun Route.completeTask() {
                 task.imagePath?.let { File(it).delete() }
             }
 
-            task.imagePath = file.path
+            task.imagePath = file.absolutePath
 
             call.respond(task)
         } catch (_: UninitializedPropertyAccessException) {
@@ -125,5 +126,31 @@ private fun Route.completeTask() {
                 message = "Missing upload file"
             )
         }
+    }
+}
+
+private fun Route.getImage() {
+    get("{id}/image") {
+        val id = call.parameters["id"] ?: return@get call.respond(
+            status = HttpStatusCode.BadRequest,
+            message = "Missing or malformed id"
+        )
+
+        val task = taskStorage.find { it.id == id } ?: return@get call.respond(
+            status = HttpStatusCode.NotFound,
+            message = "Task not found."
+        )
+
+        val imagePath = task.imagePath?.takeIf { it.isNotBlank() } ?: return@get call.respond(
+            status = HttpStatusCode.NotFound,
+            message = "The task ${task.id} has no image yet."
+        )
+
+        val image = File(imagePath).takeIf { it.exists() } ?: return@get call.respond(
+            status = HttpStatusCode.NotFound,
+            message = "Image not found."
+        )
+
+        call.respondFile(image)
     }
 }
