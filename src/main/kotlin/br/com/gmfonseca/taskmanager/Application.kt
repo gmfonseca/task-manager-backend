@@ -1,12 +1,10 @@
 package br.com.gmfonseca.taskmanager
 
-import br.com.gmfonseca.taskmanager.application.routes.registerTaskRoutes
-import io.ktor.application.Application
-import io.ktor.application.install
-import io.ktor.features.CORS
-import io.ktor.features.ContentNegotiation
-import io.ktor.serialization.json
-import io.ktor.server.netty.EngineMain
+import br.com.gmfonseca.taskmanager.application.routes.TasksRouting
+import io.ktor.application.*
+import io.ktor.features.*
+import io.ktor.serialization.*
+import io.ktor.server.netty.*
 
 fun main(args: Array<String>) = EngineMain.main(args)
 
@@ -16,9 +14,10 @@ fun Application.module() {
     install(ContentNegotiation) {
         json() // adding support to json
     }
+
     install(CORS) {
         anyHost()
     }
 
-    registerTaskRoutes()
+    TasksRouting(application = this)
 }
