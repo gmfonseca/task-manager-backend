@@ -1,56 +1,61 @@
 package br.com.gmfonseca.taskmanager.application.routes
 
-import br.com.gmfonseca.taskmanager.model.Task
-import br.com.gmfonseca.taskmanager.model.taskStorage
+import br.com.gmfonseca.taskmanager.application.controllers.TaskController
+import br.com.gmfonseca.taskmanager.application.dtos.TaskDto
 import br.com.gmfonseca.taskmanager.utils.ext.mapNameToBytes
-import io.ktor.application.Application
-import io.ktor.application.call
-import io.ktor.http.HttpStatusCode
-import io.ktor.request.receive
-import io.ktor.request.receiveMultipart
+import io.ktor.application.*
+import io.ktor.features.*
+import io.ktor.http.*
+import io.ktor.request.*
 import io.ktor.response.*
-import io.ktor.routing.Route
-import io.ktor.routing.delete
-import io.ktor.routing.get
-import io.ktor.routing.post
-import io.ktor.routing.put
-import io.ktor.routing.route
-import io.ktor.routing.routing
-import java.io.File
+import io.ktor.routing.*
 
 fun Application.registerTaskRoutes() = routing { taskRouting() }
 
-fun Route.taskRouting() = route("tasks") {
-    listTasks()
-    findTask()
-    createTask()
-    deleteTask()
-    completeTask()
-    getImage()
+fun Route.taskRouting() = route("") {
+    val taskController = TaskController()
+
+    get {
+        taskController.createTask(
+            TaskDto(
+                title = "Aowba!",
+                description = "This is an awesome description dude! Lez gou..."
+            )
+        )
+    }
+
+    route("tasks") {
+
+        listTasks(taskController)
+        createTask(taskController)
+
+        route("{id}") {
+            findTask(taskController)
+            deleteTask(taskController)
+            completeTask(taskController)
+            getImage(taskController)
+        }
+    }
 }
 
-private fun Route.listTasks() {
+private fun Route.listTasks(taskController: TaskController) {
     get {
         val completed = call.parameters["completed"]?.toBooleanStrictOrNull()
 
-        val response = if (completed != null) {
-            taskStorage.filter { it.isCompleted == completed }
-        } else {
-            taskStorage
-        }
+        val response = taskController.listTasksByCompletionStatus(isCompleted = completed)
 
         call.respond(response)
     }
 }
 
-private fun Route.findTask() {
-    get("{id}") {
+private fun Route.findTask(taskController: TaskController) {
+    get {
         val id = call.parameters["id"] ?: return@get call.respond(
             status = HttpStatusCode.BadRequest,
             message = "Missing or malformed id"
         )
 
-        val task = taskStorage.find { it.id == id } ?: return@get call.respond(
+        val task = taskController.findTask(id) ?: return@get call.respond(
             status = HttpStatusCode.NotFound,
             message = "Task not found."
         )
@@ -59,24 +64,24 @@ private fun Route.findTask() {
     }
 }
 
-private fun Route.createTask() {
+private fun Route.createTask(taskController: TaskController) {
     post {
-        val task = call.receive<Task>()
+        val task = call.receive<TaskDto>()
 
-        taskStorage.add(task)
+        val result = taskController.createTask(task)
 
-        call.respond(HttpStatusCode.Created, task)
+        call.respond(HttpStatusCode.Created, result)
     }
 }
 
-private fun Route.deleteTask() {
-    delete("{id}") {
+private fun Route.deleteTask(taskController: TaskController) {
+    delete {
         val id = call.parameters["id"] ?: return@delete call.respond(
             status = HttpStatusCode.BadRequest,
             message = "Missing or malformed id"
         )
 
-        if (taskStorage.removeIf { it.id == id }) {
+        if (taskController.deleteTaskById(id)) {
             call.respond(HttpStatusCode.OK)
         } else {
             call.respond(
@@ -87,14 +92,9 @@ private fun Route.deleteTask() {
     }
 }
 
-private fun Route.completeTask() {
-    val uploadsDir = File("uploads")
+private fun Route.completeTask(taskController: TaskController) {
 
-    if (!uploadsDir.exists()) {
-        uploadsDir.mkdirs()
-    }
-
-    put("{id}") {
+    put {
         val id = call.parameters["id"] ?: return@put call.respond(
             status = HttpStatusCode.BadRequest,
             message = "Missing or malformed id"
@@ -103,20 +103,11 @@ private fun Route.completeTask() {
         try {
             val (fileName, fileBytes) = call.receiveMultipart().mapNameToBytes()
 
-            val task = taskStorage.find { it.id == id } ?: return@put call.respond(
-                status = HttpStatusCode.NotFound,
-                message = "Task not found."
-            )
-
-            val file = File(uploadsDir, fileName).also { it.writeBytes(fileBytes) }
-
-            if (!task.isCompleted) {
-                task.isCompleted = true
-            } else {
-                task.imagePath?.let { File(it).delete() }
-            }
-
-            task.imagePath = file.absolutePath
+            val task = taskController.completeTask(taskId = id, fileName, fileBytes)
+                ?: return@put call.respond(
+                    status = HttpStatusCode.NotFound,
+                    message = "Task not found."
+                )
 
             call.respond(task)
         } catch (_: UninitializedPropertyAccessException) {
@@ -129,28 +120,22 @@ private fun Route.completeTask() {
     }
 }
 
-private fun Route.getImage() {
-    get("{id}/image") {
+private fun Route.getImage(taskController: TaskController) {
+    get("image") {
         val id = call.parameters["id"] ?: return@get call.respond(
             status = HttpStatusCode.BadRequest,
             message = "Missing or malformed id"
         )
 
-        val task = taskStorage.find { it.id == id } ?: return@get call.respond(
-            status = HttpStatusCode.NotFound,
-            message = "Task not found."
-        )
+        try {
+            val image = taskController.getTaskImageById(id) ?: return@get call.respond(
+                status = HttpStatusCode.NotFound,
+                message = "Image not found."
+            )
 
-        val imagePath = task.imagePath?.takeIf { it.isNotBlank() } ?: return@get call.respond(
-            status = HttpStatusCode.NotFound,
-            message = "The task ${task.id} has no image yet."
-        )
-
-        val image = File(imagePath).takeIf { it.exists() } ?: return@get call.respond(
-            status = HttpStatusCode.NotFound,
-            message = "Image not found."
-        )
-
-        call.respondFile(image)
+            call.respondFile(image)
+        } catch (e: NotFoundException) {
+            call.respond(status = HttpStatusCode.NotFound, "${e.message}")
+        }
     }
 }
