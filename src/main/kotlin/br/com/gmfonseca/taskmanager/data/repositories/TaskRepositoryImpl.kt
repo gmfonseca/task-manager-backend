@@ -8,26 +8,41 @@ import br.com.gmfonseca.taskmanager.utils.mappers.asDomain
 import br.com.gmfonseca.taskmanager.utils.mappers.asEntity
 import br.com.gmfonseca.taskmanager.data.entities.Task as EntityTask
 
-class TaskRepositoryImpl private constructor(
-    private val taskDataSource: TaskDataSource
+class TaskRepositoryImpl(
+    private val taskDataSource: TaskDataSource = TaskDataSourceImpl()
 ) : TaskRepository {
 
-    override suspend fun createTask(task: Task): Task = taskDataSource.createTask(task.asEntity).asDomain
+    override suspend fun createTask(task: Task): Task {
+        val taskEntity = task.asEntity
+        val createdTask = taskDataSource.createTask(taskEntity)
 
-    override suspend fun findTaskById(taskId: String): Task? = taskDataSource.findTask(taskId)?.asDomain
+        return createdTask.asDomain
+    }
 
-    override suspend fun updateTask(task: Task): Task? = taskDataSource.updateTask(task.asEntity)?.asDomain
+    override suspend fun findTaskById(taskId: String): Task? {
+        val task = taskDataSource.findTaskById(taskId)
 
-    override suspend fun listTasks(): List<Task> = taskDataSource.listTasks().map(EntityTask::asDomain)
+        return task?.asDomain
+    }
 
-    override suspend fun listTasksByCompletionStatus(isCompleted: Boolean): List<Task> =
-        taskDataSource.listTasksByCompletionStatus(isCompleted).map(EntityTask::asDomain)
+    override suspend fun updateTask(task: Task): Task? {
+        val taskEntity = task.asEntity
+        val updatedTask = taskDataSource.updateTask(taskEntity)
+
+        return updatedTask?.asDomain
+    }
+
+    override suspend fun listTasks(): List<Task> {
+        val tasks = taskDataSource.listTasks()
+
+        return tasks.map(EntityTask::asDomain)
+    }
+
+    override suspend fun listTasksByCompletionStatus(isCompleted: Boolean): List<Task> {
+        val tasks = taskDataSource.listTasksByCompletionStatus(isCompleted)
+
+        return tasks.map(EntityTask::asDomain)
+    }
 
     override suspend fun deleteTaskById(taskId: String): Boolean = taskDataSource.deleteTaskById(taskId)
-
-    companion object : RepositoryFactory<TaskRepositoryImpl> {
-        private val INSTANCE by lazy { TaskRepositoryImpl(TaskDataSourceImpl()) }
-
-        override fun invoke(): TaskRepositoryImpl = INSTANCE
-    }
 }

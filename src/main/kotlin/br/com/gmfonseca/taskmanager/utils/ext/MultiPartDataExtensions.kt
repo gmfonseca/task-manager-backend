@@ -1,12 +1,13 @@
 package br.com.gmfonseca.taskmanager.utils.ext
 
+import br.com.gmfonseca.taskmanager.utils.models.FileData
 import io.ktor.http.content.MultiPartData
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.http.content.streamProvider
 import java.util.UUID
 
-suspend fun MultiPartData.mapNameToBytes(): Pair<String, ByteArray> {
+suspend fun MultiPartData.extractFileData(): FileData {
     var fileName = UUID.randomUUID().toString()
     lateinit var fileBytes: ByteArray
 
@@ -22,5 +23,5 @@ suspend fun MultiPartData.mapNameToBytes(): Pair<String, ByteArray> {
         }
     }
 
-    return fileName to fileBytes
+    return FileData(name = fileName, bytes = fileBytes)
 }

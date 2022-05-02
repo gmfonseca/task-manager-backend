@@ -24,40 +24,56 @@ import br.com.gmfonseca.taskmanager.domain.usecases.ListTasksUseCaseImpl
 import br.com.gmfonseca.taskmanager.domain.usecases.ListTasksUseCaseParams
 import br.com.gmfonseca.taskmanager.utils.mappers.asDomain
 import br.com.gmfonseca.taskmanager.utils.mappers.asDto
+import br.com.gmfonseca.taskmanager.utils.models.FileData
+import java.io.File
 
 class TaskController(
     taskRepository: TaskRepository = TaskRepositoryImpl(),
-    private val findTaskUseCaseById: FindTaskUseCaseById = FindTaskUseCaseByIdImpl(taskRepository),
-    private val listTasksUseCase: ListTasksUseCase = ListTasksUseCaseImpl(taskRepository),
     private val createTaskUseCase: CreateTaskUseCase = CreateTaskUseCaseImpl(taskRepository),
-    private val deleteTaskByIdUseCase: DeleteTaskByIdUseCase = DeleteTaskByIdUseCaseImpl(taskRepository),
+    private val listTasksUseCase: ListTasksUseCase = ListTasksUseCaseImpl(taskRepository),
+    private val findTaskUseCaseById: FindTaskUseCaseById = FindTaskUseCaseByIdImpl(taskRepository),
     private val completeTaskUseCase: CompleteTaskUseCase = CompleteTaskUseCaseImpl(taskRepository),
     private val getTaskImageByIdUseCase: GetTaskImageByIdUseCase = GetTaskImageByIdUseCaseImpl(taskRepository),
+    private val deleteTaskByIdUseCase: DeleteTaskByIdUseCase = DeleteTaskByIdUseCaseImpl(taskRepository),
 ) {
 
-    suspend fun createTask(dto: TaskDto): TaskDto = createTaskUseCase.execute(
-        params = CreateTaskUseCaseParams(task = dto.asDomain)
-    ).asDto
+    suspend fun createTask(taskDto: TaskDto): TaskDto {
+        val params = CreateTaskUseCaseParams(task = taskDto.asDomain)
+        val createdTask = createTaskUseCase.execute(params = params)
 
-    suspend fun findTask(taskId: String): TaskDto? = findTaskUseCaseById.execute(
-        params = FindTaskUseCaseByIdParams(taskId)
-    )?.asDto
+        return createdTask.asDto
+    }
 
-    suspend fun listTasksByCompletionStatus(isCompleted: Boolean?): List<TaskDto> =
-        listTasksUseCase.execute(
-            params = ListTasksUseCaseParams(isCompleted = isCompleted)
-        ).map(Task::asDto)
+    suspend fun listTasksByCompletionStatus(isCompleted: Boolean?): List<TaskDto> {
+        val params = ListTasksUseCaseParams(isCompleted = isCompleted)
+        val tasks = listTasksUseCase.execute(params = params)
 
-    suspend fun deleteTaskById(taskId: String) = deleteTaskByIdUseCase.execute(
-        params = DeleteTaskByIdUseCaseParams(taskId)
-    )
+        return tasks.map(Task::asDto)
+    }
 
-    suspend fun completeTask(taskId: String, fileName: String, fileBytes: ByteArray): TaskDto? =
-        completeTaskUseCase.execute(
-            params = CompleteTaskUseCaseParams(taskId, fileName, fileBytes)
-        )?.asDto
+    suspend fun findTask(taskId: String): TaskDto? {
+        val params = FindTaskUseCaseByIdParams(taskId)
+        val task = findTaskUseCaseById.execute(params = params)
 
-    suspend fun getTaskImageById(taskId: String) = getTaskImageByIdUseCase.execute(
-        params = GetTaskImageByIdUseCaseParams(taskId = taskId)
-    )
+        return task?.asDto
+    }
+
+    suspend fun completeTask(taskId: String, fileData: FileData): TaskDto? {
+        val params = CompleteTaskUseCaseParams(taskId, fileData)
+        val task = completeTaskUseCase.execute(params = params)
+
+        return task?.asDto
+    }
+
+    suspend fun getTaskImageById(taskId: String): File {
+        val params = GetTaskImageByIdUseCaseParams(taskId = taskId)
+
+        return getTaskImageByIdUseCase.execute(params = params)
+    }
+
+    suspend fun deleteTaskById(taskId: String): Boolean {
+        val params = DeleteTaskByIdUseCaseParams(taskId)
+
+        return deleteTaskByIdUseCase.execute(params = params)
+    }
 }

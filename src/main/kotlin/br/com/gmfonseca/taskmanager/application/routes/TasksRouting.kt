@@ -2,15 +2,16 @@ package br.com.gmfonseca.taskmanager.application.routes
 
 import br.com.gmfonseca.taskmanager.application.controllers.TaskController
 import br.com.gmfonseca.taskmanager.application.dtos.TaskDto
-import br.com.gmfonseca.taskmanager.contracts.HttpMethod
-import br.com.gmfonseca.taskmanager.contracts.rest.RoutePath
-import br.com.gmfonseca.taskmanager.utils.ext.mapNameToBytes
+import br.com.gmfonseca.taskmanager.utils.contracts.HttpMethod
+import br.com.gmfonseca.taskmanager.utils.contracts.rest.RoutePath
+import br.com.gmfonseca.taskmanager.utils.ext.extractFileData
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
+import io.ktor.util.pipeline.*
 
 class TasksRouting(
     application: Application,
@@ -18,123 +19,104 @@ class TasksRouting(
 ) {
 
     init {
-        application.routing {
+        application.tasksRouting()
+    }
+
+    private fun Application.tasksRouting() {
+        routing {
             route("tasks") {
-                listTasks()
-                createTask()
+                post { createTask() }
+                get { listTasks() }
 
-                findTask()
-                deleteTask()
-                completeTask()
-                getImage()
+                get("{id}") { findTask() }
+                put("{id}") { completeTask() }
+                delete("{id}") { deleteTask() }
+
+                get("{id}/image") { getImage() }
             }
-        }
-    }
-
-    @RoutePath(name = "tasks", method = HttpMethod.GET)
-    private fun Route.listTasks() {
-        get {
-            val completed = call.parameters["completed"]?.toBooleanStrictOrNull()
-
-            val response = taskController.listTasksByCompletionStatus(isCompleted = completed)
-
-            call.respond(response)
-        }
-    }
-
-    @RoutePath(name = "tasks/{id}", method = HttpMethod.GET)
-    private fun Route.findTask() {
-        get("{id}") {
-            val id = call.parameters["id"] ?: return@get call.respond(
-                status = HttpStatusCode.BadRequest,
-                message = "Missing or malformed id"
-            )
-
-            val task = taskController.findTask(id) ?: return@get call.respond(
-                status = HttpStatusCode.NotFound,
-                message = "Task not found."
-            )
-
-            call.respond(task)
         }
     }
 
     @RoutePath(name = "tasks", method = HttpMethod.POST)
-    private fun Route.createTask() {
-        post {
-            val task = call.receive<TaskDto>()
+    private suspend fun PipelineContext<Unit, ApplicationCall>.createTask() {
+        val task = call.receive<TaskDto>()
 
-            val result = taskController.createTask(task)
+        val createdTask = taskController.createTask(task)
 
-            call.respond(HttpStatusCode.Created, result)
+        call.respond(HttpStatusCode.Created, createdTask)
+    }
+
+    @RoutePath(name = "tasks", method = HttpMethod.GET)
+    private suspend fun PipelineContext<Unit, ApplicationCall>.listTasks() {
+        val completed = call.parameters["completed"]?.toBooleanStrictOrNull()
+
+        val response = taskController.listTasksByCompletionStatus(isCompleted = completed)
+
+        call.respond(response)
+    }
+
+    @RoutePath(name = "tasks/{id}", method = HttpMethod.GET)
+    private suspend fun PipelineContext<Unit, ApplicationCall>.findTask() {
+        val id = call.getId()
+
+        val task = taskController.findTask(id)
+            ?: return call.respond(
+                status = HttpStatusCode.NotFound,
+                message = "Task not found"
+            )
+
+        call.respond(task)
+    }
+
+    @RoutePath(name = "tasks/{id}", method = HttpMethod.PUT)
+    private suspend fun PipelineContext<Unit, ApplicationCall>.completeTask() {
+        val id = call.getId()
+
+        try {
+            val fileData = call.receiveMultipart().extractFileData()
+
+            val task = taskController.completeTask(taskId = id, fileData)
+                ?: return call.respond(
+                    status = HttpStatusCode.NotFound,
+                    message = "Task not found"
+                )
+
+            call.respond(task)
+        } catch (_: UninitializedPropertyAccessException) {
+            call.respond(
+                status = HttpStatusCode.BadRequest,
+                message = "Missing upload file"
+            )
         }
     }
 
     @RoutePath(name = "tasks/{id}", method = HttpMethod.DELETE)
-    private fun Route.deleteTask() {
-        delete("{id}") {
-            val id = call.parameters["id"] ?: return@delete call.respond(
-                status = HttpStatusCode.BadRequest,
-                message = "Missing or malformed id"
-            )
+    private suspend fun PipelineContext<Unit, ApplicationCall>.deleteTask() {
+        val id = call.getId()
+        val deletedTask = taskController.deleteTaskById(id)
 
-            if (taskController.deleteTaskById(id)) {
-                call.respond(HttpStatusCode.OK)
-            } else {
-                call.respond(
-                    status = HttpStatusCode.NotFound,
-                    message = "Task not found."
-                )
-            }
-        }
-    }
-
-    @RoutePath(name = "tasks/{id}", method = HttpMethod.PUT)
-    private fun Route.completeTask() {
-        put("{id}") {
-            val id = call.parameters["id"] ?: return@put call.respond(
-                status = HttpStatusCode.BadRequest,
-                message = "Missing or malformed id"
-            )
-
-            try {
-                val (fileName, fileBytes) = call.receiveMultipart().mapNameToBytes()
-
-                val task = taskController.completeTask(taskId = id, fileName, fileBytes)
-                    ?: return@put call.respond(
-                        status = HttpStatusCode.NotFound,
-                        message = "Task not found."
-                    )
-
-                call.respond(task)
-            } catch (_: UninitializedPropertyAccessException) {
-                println("[CompleteTask] Missing upload file")
-                call.respond(
-                    status = HttpStatusCode.BadRequest,
-                    message = "Missing upload file"
-                )
-            }
-        }
+        if (deletedTask) call.respond(HttpStatusCode.OK)
+        else call.respond(status = HttpStatusCode.NotFound, message = "Task not found")
     }
 
     @RoutePath(name = "tasks/{id}/image", method = HttpMethod.GET)
-    private fun Route.getImage() {
-        get("{id}/image") {
-            val id = call.parameters["id"] ?: return@get call.respond(
-                status = HttpStatusCode.BadRequest,
-                message = "Missing or malformed id"
-            )
+    private suspend fun PipelineContext<Unit, ApplicationCall>.getImage() {
+        val id = call.getId()
 
-            try {
-                val image = taskController.getTaskImageById(id) ?: return@get call.respond(
-                    status = HttpStatusCode.NotFound,
-                    message = "Image not found."
-                )
+        try {
+            val imageFile = taskController.getTaskImageById(id)
 
-                call.respondFile(image)
-            } catch (e: NotFoundException) {
-                call.respond(status = HttpStatusCode.NotFound, "${e.message}")
-            }
+            call.respondFile(imageFile)
+        } catch (e: NotFoundException) {
+            call.respond(status = HttpStatusCode.NotFound, "${e.message}")
         }
     }
+
+    private fun ApplicationCall.requireParameter(name: String, lazyMessage: () -> String): String {
+        return requireNotNull(parameters[name]) {
+            throw BadRequestException(message = lazyMessage())
+        }
+    }
+
+    private fun ApplicationCall.getId(): String = requireParameter("id") { "Missing or malformed id" }
 }

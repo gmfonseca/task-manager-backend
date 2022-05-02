@@ -8,7 +8,7 @@ class TaskDataSourceImpl : TaskDataSource {
 
     override suspend fun createTask(task: Task): Task = task.apply { _taskStorage.add(task) }
 
-    override suspend fun findTask(taskId: String): Task? = _taskStorage.find { it.id == taskId }
+    override suspend fun findTaskById(taskId: String): Task? = _taskStorage.find { it.id == taskId }
 
     override suspend fun updateTask(task: Task): Task? {
         return if (deleteTaskById(task.id)) {
